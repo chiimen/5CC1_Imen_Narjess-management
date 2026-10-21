@@ -32,7 +32,7 @@ class StudentServiceTest {
 
     @BeforeEach
     void setUp() {
-        msstudent = new Student();
+        student = new Student();
         student.setIdStudent(1L);
         student.setFirstName("Amira");
         student.setLastName("Ben Salah");
