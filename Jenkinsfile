@@ -6,34 +6,38 @@ pipeline {
         maven 'M2_HOME'
     }
 
+    environment {
+        DOCKERHUB_USER = 'imenchi'
+        IMAGE = "${DOCKERHUB_USER}/student-management"
+    }
+
     triggers {
         pollSCM('H/5 * * * *')
     }
 
-    environment {
-        IMAGE_NAME = 'imenchi/student-management'
-        IMAGE_TAG = "${BUILD_NUMBER}"
-    }
-
     stages {
-
-        stage('Commit') {
+        stage('Git') {
             steps {
-                sh 'git log -1 --pretty=format:"Hash: %h%nAuteur: %an%nMessage: %s"'
+                checkout scm
+                script {
+                    env.BRANCHE = (env.GIT_BRANCH ?: 'main').replaceAll('^origin/', '')
+                    env.TAG = "${env.BRANCHE}-${env.BUILD_NUMBER}"
+                }
+                sh 'git log -1 --pretty=format:"%h - %an : %s"'
+                echo "Branche : ${env.BRANCHE} — tag : ${env.TAG}"
             }
         }
 
         stage('Build') {
             steps {
-                sh 'mvn clean package -DskipTests'
+                sh 'mvn -B clean package -DskipTests'
             }
         }
 
         stage('Test unitaire') {
             steps {
-                sh 'mvn test'
+                sh 'mvn -B test'
             }
-
             post {
                 always {
                     junit 'target/surefire-reports/*.xml'
@@ -41,43 +45,62 @@ pipeline {
             }
         }
 
-        stage('Docker Build') {
+        stage('Docker build') {
             steps {
-                sh 'docker build -t "$IMAGE_NAME:$IMAGE_TAG" -t "$IMAGE_NAME:latest" .'
+                sh 'docker build -t "$IMAGE:$TAG" .'
             }
         }
 
-        stage('Docker Push') {
+        stage('Docker push') {
             steps {
                 withCredentials([usernamePassword(
-                    credentialsId: 'dockerhub-credentials',
-                    usernameVariable: 'DOCKERHUB_USERNAME',
-                    passwordVariable: 'DOCKERHUB_TOKEN'
+                    credentialsId: 'dockerhub',
+                    usernameVariable: 'DH_USER',
+                    passwordVariable: 'DH_PASS'
                 )]) {
                     sh '''
                         set +x
-                        printf '%s' "$DOCKERHUB_TOKEN" | docker login \
-                            -u "$DOCKERHUB_USERNAME" --password-stdin
-                        docker push "$IMAGE_NAME:$IMAGE_TAG"
-                        docker push "$IMAGE_NAME:latest"
+                        printf '%s' "$DH_PASS" | docker login -u "$DH_USER" --password-stdin
+                        docker push "$IMAGE:$TAG"
                     '''
+                    script {
+                        if (env.BRANCHE == 'main') {
+                            sh '''
+                                docker tag "$IMAGE:$TAG" "$IMAGE:latest"
+                                docker push "$IMAGE:latest"
+                            '''
+                        }
+                    }
                 }
+            }
+        }
+
+        stage('Déploiement') {
+            when {
+                expression { env.BRANCHE == 'main' }
+            }
+            steps {
+                sh 'docker compose pull app'
+                sh 'docker compose up -d'
             }
         }
     }
 
     post {
-        always {
-            sh 'docker logout'
-        }
-
         success {
             archiveArtifacts artifacts: 'target/*.jar', fingerprint: true
-            echo 'Pipeline terminé avec succès.'
+            echo "Succès : image ${IMAGE}:${TAG} publiée."
         }
-
         failure {
-            echo 'Pipeline échoué.'
+            echo 'Échec : consulter la Console Output du stage en rouge.'
+        }
+        always {
+            sh 'docker logout || true'
+            sh '''
+                if [ -n "$TAG" ]; then
+                    docker image rm "$IMAGE:$TAG" || true
+                fi
+            '''
         }
     }
 }
