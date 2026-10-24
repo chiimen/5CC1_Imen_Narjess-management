@@ -83,4 +83,26 @@ class StudentServiceTest {
 
         verify(studentRepository, times(1)).deleteById(1L);
     }
+
+    @Test
+    void getStudentByEmail_existant_retourneLEtudiant() {
+        String email = student.getEmail();
+        when(studentRepository.findByEmail(email)).thenReturn(Optional.of(student));
+
+        Student result = studentService.getStudentByEmail(email);
+
+        assertNotNull(result);
+        assertEquals(student.getIdStudent(), result.getIdStudent());
+        assertEquals(email, result.getEmail());
+        verify(studentRepository).findByEmail(email);
+    }
+
+    @Test
+    void getStudentByEmail_inexistant_retourneNull() {
+        String email = "inconnu@example.com";
+        when(studentRepository.findByEmail(email)).thenReturn(Optional.empty());
+
+        assertNull(studentService.getStudentByEmail(email));
+        verify(studentRepository).findByEmail(email);
+    }
 }
