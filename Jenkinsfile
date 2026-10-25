@@ -45,6 +45,26 @@ pipeline {
             }
         }
 
+        stage('Analyse SonarQube') {
+            steps {
+                withSonarQubeEnv('sonarqube') {
+                    sh '''
+                        mvn -B sonar:sonar \
+                          -Dsonar.projectKey=student-management-${BRANCHE} \
+                          -Dsonar.projectName=student-management-${BRANCHE}
+                    '''
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
         stage('Docker build') {
             steps {
                 sh 'docker build -t "$IMAGE:$TAG" .'
