@@ -10,7 +10,7 @@ import tn.esprit.studentmanagement.entities.Department;
 import tn.esprit.studentmanagement.repositories.DepartmentRepository;
 
 import java.util.List;
-import java.util.NoSuchElementException;
+import jakarta.persistence.EntityNotFoundException;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -60,11 +60,11 @@ class DepartmentServiceTest {
     }
 
     @Test
-    void getDepartmentById_inexistant_leveNoSuchElementException() {
+    void getDepartmentById_inexistant_leveEntityNotFoundException() {
         when(departmentRepository.findById(99L)).thenReturn(Optional.empty());
 
-        // Le service appelle Optional.get() : un id inconnu provoque une exception
-        assertThrows(NoSuchElementException.class,
+        // Un id inconnu provoque une EntityNotFoundException
+        assertThrows(EntityNotFoundException.class,
                 () -> departmentService.getDepartmentById(99L));
     }
 
